@@ -1,0 +1,19 @@
+# Build output
+x64/
+x86/
+[Dd]ebug/
+[Rr]elease/
+build/
+out/
+
+# Visual Studio cache and per-user settings
+.vs/
+*.user
+*.suo
+
+# Compiled and intermediate files
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.idb
