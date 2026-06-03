@@ -1,6 +1,6 @@
 #pragma once
 
-#include <iosfwd>   // forward-declares std::ostream — keeps this header light
+#include <iosfwd>   // forward-declares std::ostream - keeps this header light
 
 // The atom of recon-viewer's data model.
 struct Vec3 {

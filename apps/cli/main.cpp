@@ -1,5 +1,5 @@
 #include <iostream>
-#include "PointCloud.h"   // brings in PointCloud, AABB, and (via it) Vec3
+#include "core/types/PointCloud.h"   // brings in PointCloud, AABB, and (via it) Vec3
 
 int main() {
     PointCloud cloud;

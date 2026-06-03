@@ -1,4 +1,4 @@
-#include "Vec3.h"
+#include "core/math/Vec3.h"
 
 #include <cmath>     // std::sqrt
 #include <ostream>   // the full std::ostream, needed to actually write to it

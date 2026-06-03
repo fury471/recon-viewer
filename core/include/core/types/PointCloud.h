@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-#include "Vec3.h"
+#include "core/math/Vec3.h"
 
 struct PointCloud {
     std::vector<Vec3> positions;

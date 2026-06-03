@@ -1,4 +1,4 @@
-#include "PointCloud.h"
+#include "core/types/PointCloud.h"
 
 #include <cmath>     // std::fmin, std::fmax
 #include <limits>    // std::numeric_limits
