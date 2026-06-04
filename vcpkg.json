@@ -1,0 +1,8 @@
+{
+  "name": "recon-viewer",
+  "version": "0.1.0",
+  "dependencies": [
+    "catch2"
+  ],
+  "builtin-baseline": "cea592f4772491abdb7c483387a59ea89889f4be"
+}

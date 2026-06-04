@@ -5,6 +5,7 @@ x86/
 [Rr]elease/
 build/
 out/
+vcpkg_installed/
 
 # Visual Studio cache and per-user settings
 .vs/
