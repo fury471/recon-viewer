@@ -3,6 +3,8 @@
 
 #include "core/math/Vec3.h"
 #include "core/types/PointCloud.h"
+#include "core/types/Mesh.h"
+#include "core/interfaces/ISurfaceReconstructor.h"
 
 using Catch::Approx;
 
@@ -94,4 +96,60 @@ TEST_CASE("length of a unit-ish vector needs tolerance") {
 TEST_CASE("squaring a length should recover the squared norm") {
     Vec3 v{ 1.0f, 1.0f, 0.0f };
     REQUIRE(length(v) * length(v) == Approx(dot(v, v)));
+}
+
+// A placeholder implementation: just turns the cloud's points into vertices.
+class StubSurface : public ISurfaceReconstructor {
+public:
+    Mesh reconstruct(const PointCloud& cloud) override {
+        Mesh mesh;
+        mesh.vertices = cloud.positions;   // no real surfacing yet — that's Phase 3
+        return mesh;
+    }
+};
+
+class CentroidSurface : public ISurfaceReconstructor {
+public:
+    Mesh reconstruct(const PointCloud& cloud) override {
+        Mesh mesh;
+        mesh.vertices.push_back(centroid(cloud));   // a single vertex: the cloud's center
+        return mesh;
+    }
+};
+
+Mesh runStage(ISurfaceReconstructor& stage, const PointCloud& cloud) {
+    return stage.reconstruct(cloud);
+}
+// runStage(stub, cloud)  → 2 vertices;  runStage(centroidStage, cloud) → 1
+
+TEST_CASE("a stage can be swapped at runtime through a pointer") {
+    StubSurface stub;
+	CentroidSurface centroidStage;
+
+    PointCloud cloud;
+    cloud.positions.push_back(Vec3{ 1.0f, 2.0f, 3.0f });
+    cloud.positions.push_back(Vec3{ 4.0f, 5.0f, 6.0f });
+
+    ISurfaceReconstructor* stage = &stub;   // pointer: holds the address of stub
+
+    Mesh m = stage->reconstruct(cloud);     // dispatches to StubSurface → 2 vertices
+    stage = &centroidStage;                 // re-point at the other implementation
+    Mesh n = stage->reconstruct(cloud);     // dispatches to CentroidSurface → 1 vertex
+
+    REQUIRE(m.vertices.size() == 2);
+	REQUIRE(n.vertices.size() == 1);
+}
+
+TEST_CASE("a stage can be invoked polymorphically via a function") {
+    StubSurface stub;
+    CentroidSurface centroidStage;
+
+    PointCloud cloud;
+    cloud.positions.push_back(Vec3{ 1.0f, 2.0f, 3.0f });
+    cloud.positions.push_back(Vec3{ 4.0f, 5.0f, 6.0f });
+
+    Mesh m = runStage(stub, cloud);             // dispatches to StubSurface::reconstruct
+    Mesh n = runStage(centroidStage, cloud);    // dispatches to CentroidSurface::reconstruct
+    REQUIRE(m.vertices.size() == 2);
+    REQUIRE(n.vertices.size() == 1);
 }
