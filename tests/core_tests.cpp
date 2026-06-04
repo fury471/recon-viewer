@@ -90,3 +90,8 @@ TEST_CASE("length of a unit-ish vector needs tolerance") {
     Vec3 v{ 1.0f, 1.0f, 1.0f };
     REQUIRE(length(v) == Approx(1.7320508f));   // sqrt(3)
 }
+
+TEST_CASE("squaring a length should recover the squared norm") {
+    Vec3 v{ 1.0f, 1.0f, 0.0f };
+    REQUIRE(length(v) * length(v) == Approx(dot(v, v)));
+}
