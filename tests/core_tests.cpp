@@ -1,10 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <sstream>
 
 #include "core/math/Vec3.h"
 #include "core/types/PointCloud.h"
 #include "core/types/Mesh.h"
 #include "core/interfaces/ISurfaceReconstructor.h"
+#include "io/XyzReader.h"
 
 using Catch::Approx;
 
@@ -152,4 +154,14 @@ TEST_CASE("a stage can be invoked polymorphically via a function") {
     Mesh n = runStage(centroidStage, cloud);    // dispatches to CentroidSurface::reconstruct
     REQUIRE(m.vertices.size() == 2);
     REQUIRE(n.vertices.size() == 1);
+}
+
+TEST_CASE("readXyz parses whitespace-separated points") {
+    std::istringstream in("0 0 0\n1 2 3\n4 5 6\n");
+    PointCloud cloud = readXyz(in);
+
+    REQUIRE(cloud.positions.size() == 3);
+    REQUIRE(cloud.positions[1].x == Approx(1.0f));
+    REQUIRE(cloud.positions[1].y == Approx(2.0f));
+    REQUIRE(cloud.positions[1].z == Approx(3.0f));
 }
