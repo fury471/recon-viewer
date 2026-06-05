@@ -7,6 +7,7 @@
 #include "core/types/Mesh.h"
 #include "core/interfaces/ISurfaceReconstructor.h"
 #include "io/XyzReader.h"
+#include "io/XyzWriter.h"
 
 using Catch::Approx;
 
@@ -164,4 +165,23 @@ TEST_CASE("readXyz parses whitespace-separated points") {
     REQUIRE(cloud.positions[1].x == Approx(1.0f));
     REQUIRE(cloud.positions[1].y == Approx(2.0f));
     REQUIRE(cloud.positions[1].z == Approx(3.0f));
+}
+
+TEST_CASE("XYZ round-trips: writing then reading recovers the points") {
+    PointCloud original;
+    original.positions.push_back(Vec3{ 1.0f, 2.0f, 3.0f });
+    original.positions.push_back(Vec3{ -4.0f, 5.5f, 6.0f });
+
+    std::ostringstream out;
+    writeXyz(out, original);
+
+    std::istringstream in(out.str());
+    PointCloud loaded = readXyz(in);
+
+    REQUIRE(loaded.positions.size() == original.positions.size());
+    for (std::size_t i = 0; i < original.positions.size(); ++i) {
+        REQUIRE(loaded.positions[i].x == Approx(original.positions[i].x));
+        REQUIRE(loaded.positions[i].y == Approx(original.positions[i].y));
+        REQUIRE(loaded.positions[i].z == Approx(original.positions[i].z));
+    }
 }
