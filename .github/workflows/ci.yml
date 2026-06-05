@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest   # 1× minutes, and proves the project is portable
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true        # clone the pinned vcpkg
 
       - name: Cache vcpkg packages
         uses: actions/cache@v4
@@ -26,7 +28,7 @@ jobs:
           key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+        run: cmake --preset default
 
       - name: Build
         run: cmake --build build
