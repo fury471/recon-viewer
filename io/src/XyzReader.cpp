@@ -1,6 +1,7 @@
 #include "io/XyzReader.h"
 
 #include <fstream>
+#include <spdlog/spdlog.h>
 
 PointCloud readXyz(std::istream& in) {
     PointCloud cloud;
@@ -13,5 +14,9 @@ PointCloud readXyz(std::istream& in) {
 
 PointCloud XyzReader::read(const std::string& path) {
     std::ifstream file(path);
+    if (!file) {
+        spdlog::error("XyzReader: could not open file '{}'", path);
+        return {};   // an empty cloud — a deliberate, recognizable failure result
+    }
     return readXyz(file);
 }

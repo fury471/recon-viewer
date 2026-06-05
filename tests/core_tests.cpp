@@ -185,3 +185,9 @@ TEST_CASE("XYZ round-trips: writing then reading recovers the points") {
         REQUIRE(loaded.positions[i].z == Approx(original.positions[i].z));
     }
 }
+
+TEST_CASE("XyzReader yields an empty cloud for a missing file") {
+    XyzReader reader;
+    PointCloud cloud = reader.read("definitely_not_a_real_file.xyz");
+    REQUIRE(cloud.positions.empty());
+}
