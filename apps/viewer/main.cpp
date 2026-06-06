@@ -3,6 +3,7 @@
 
 #include "gpu/Context.h"
 #include "render/Swapchain.h"
+#include "render/Renderer.h"
 
 #include <spdlog/spdlog.h>
 
@@ -44,6 +45,7 @@ int main() {
         spdlog::info("Rendering on: {}", context.deviceName());
 
         render::Swapchain swapchain(context, 1280, 720);
+        render::Renderer  renderer(context);
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
