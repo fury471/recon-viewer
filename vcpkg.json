@@ -5,6 +5,8 @@
   "dependencies": [
     "catch2",
     "spdlog",
-    "glfw3"
+    "glfw3",
+    "vk-bootstrap",
+    "vulkan-memory-allocator"
   ]
 }

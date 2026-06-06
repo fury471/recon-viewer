@@ -1,21 +1,51 @@
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include "gpu/Context.h"
+
+#include <spdlog/spdlog.h>
+
+#include <cstdint>
+
 int main() {
-    glfwInit();
+    if (!glfwInit()) { spdlog::error("GLFW init failed"); return 1; }
+    if (!glfwVulkanSupported()) {
+        spdlog::error("Vulkan not supported on this system");
+        glfwTerminate();
+        return 1;
+    }
 
-    // We'll render with Vulkan, not OpenGL, so tell GLFW not to
-    // create an OpenGL context for this window.
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    // Fixed size for now: a resizable window means rebuilding the
-    // Vulkan swapchain on every resize, which we'll defer.
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
     GLFWwindow* window =
         glfwCreateWindow(1280, 720, "recon-viewer", nullptr, nullptr);
 
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-    }
+    {   // context lives in this scope so it tears down before the window
+        uint32_t count = 0;
+        const char** glfwExts = glfwGetRequiredInstanceExtensions(&count);
+
+        gpu::ContextCreateInfo info;
+        info.requiredInstanceExtensions.assign(glfwExts, glfwExts + count);
+        info.createSurface = [window](VkInstance instance) -> VkSurfaceKHR {
+            VkSurfaceKHR surface = VK_NULL_HANDLE;
+            if (glfwCreateWindowSurface(instance, window, nullptr, &surface)
+                != VK_SUCCESS)
+                return VK_NULL_HANDLE;
+            return surface;
+            };
+#ifdef NDEBUG
+        info.enableValidation = false;   // release: no validation overhead
+#else
+        info.enableValidation = true;    // debug: validation layers on
+#endif
+
+        gpu::Context context(info);
+        spdlog::info("Rendering on: {}", context.deviceName());
+
+        while (!glfwWindowShouldClose(window)) {
+            glfwPollEvents();
+        }
+    }   // gpu::Context destroyed here
 
     glfwDestroyWindow(window);
     glfwTerminate();
