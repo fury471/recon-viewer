@@ -27,6 +27,11 @@ jobs:
           path: ~/.cache/vcpkg/archives
           key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
 
+      - name: Install GLFW build dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxinerama-dev libxcursor-dev xorg-dev libglu1-mesa-dev pkg-config
+
       - name: Configure
         run: cmake --preset default
 
