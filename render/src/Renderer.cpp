@@ -1,5 +1,6 @@
 #include "render/Renderer.h"
 
+#include "render/Swapchain.h"
 #include "gpu/Context.h"
 
 #include <spdlog/spdlog.h>
@@ -8,7 +9,7 @@
 
 namespace render {
 
-    Renderer::Renderer(const gpu::Context& ctx) : ctx_(ctx) {
+    Renderer::Renderer(const gpu::Context& ctx, const Swapchain& swapchain) : ctx_(ctx), swapchain_(swapchain) {
         // Command pool — the allocator that command buffers come from. It's tied
         // to the graphics queue family (the lane its tickets will run on), and the
         // RESET flag lets us wipe and re-record the buffer fresh every frame.
@@ -30,14 +31,36 @@ namespace render {
             != VK_SUCCESS)
             throw std::runtime_error("render: command buffer allocation failed");
 
-        spdlog::info("render: command pool and buffer ready");
+        // --------------- Sync objects  --------------------
+        VkSemaphoreCreateInfo semInfo{};
+        semInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;   // start "already done"
+
+        if (vkCreateSemaphore(ctx.device(), &semInfo, nullptr, &imageAvailable_)
+            != VK_SUCCESS ||
+            vkCreateFence(ctx.device(), &fenceInfo, nullptr, &inFlightFence_)
+            != VK_SUCCESS)
+            throw std::runtime_error("render: per-frame sync creation failed");
+
+        renderFinished_.resize(swapchain.imageCount());
+        for (VkSemaphore& sem : renderFinished_)
+            if (vkCreateSemaphore(ctx.device(), &semInfo, nullptr, &sem)
+                != VK_SUCCESS)
+                throw std::runtime_error("render: render-finished sem creation failed");
+
+        spdlog::info("render: sync objects ready ({} render-finished semaphores)",
+            renderFinished_.size());
     }
 
     Renderer::~Renderer() {
-        // Destroying the pool frees every command buffer it handed out, so there's
-        // nothing else to clean up here.
-        if (commandPool_)
-            vkDestroyCommandPool(ctx_.device(), commandPool_, nullptr);
+        for (VkSemaphore sem : renderFinished_)
+            vkDestroySemaphore(ctx_.device(), sem, nullptr);
+        if (inFlightFence_)  vkDestroyFence(ctx_.device(), inFlightFence_, nullptr);
+        if (imageAvailable_) vkDestroySemaphore(ctx_.device(), imageAvailable_, nullptr);
+        if (commandPool_)    vkDestroyCommandPool(ctx_.device(), commandPool_, nullptr);
     }
 
 }  // namespace render

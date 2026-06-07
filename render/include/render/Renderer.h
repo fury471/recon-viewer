@@ -2,13 +2,16 @@
 
 #include <vulkan/vulkan.h>
 
+#include <vector>
+
 namespace gpu { class Context; }
+namespace render { class Swapchain; }
 
 namespace render {
 
     class Renderer {
     public:
-        explicit Renderer(const gpu::Context& ctx);
+        explicit Renderer(const gpu::Context& ctx, const Swapchain& swapchain);
         ~Renderer();
 
         Renderer(const Renderer&) = delete;
@@ -16,8 +19,14 @@ namespace render {
 
     private:
         const gpu::Context& ctx_;
+        const Swapchain& swapchain_;
+
         VkCommandPool   commandPool_ = VK_NULL_HANDLE;
         VkCommandBuffer commandBuffer_ = VK_NULL_HANDLE;
+
+        VkSemaphore              imageAvailable_ = VK_NULL_HANDLE;  // per frame
+        VkFence                  inFlightFence_ = VK_NULL_HANDLE;   // per frame
+        std::vector<VkSemaphore> renderFinished_;                   // one per image
     };
 
 }  // namespace render
