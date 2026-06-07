@@ -31,7 +31,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libxinerama-dev libxcursor-dev xorg-dev \
-            libglu1-mesa-dev pkg-config libvulkan-dev
+            libglu1-mesa-dev pkg-config libvulkan-dev glslc
 
       - name: Configure
         run: cmake --preset default
