@@ -49,6 +49,7 @@ int main() {
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
+            renderer.drawFrame();
         }
     }   // gpu::Context destroyed here
 

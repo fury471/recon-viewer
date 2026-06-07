@@ -8,6 +8,29 @@
 #include <stdexcept>
 
 namespace render {
+    // Changes a swapchain image's "mode". The exact stage/access masks below are
+    // the broad, always-correct recipe (we can tighten them for speed later).
+    static void transitionImage(VkCommandBuffer cmd, VkImage image,
+        VkImageLayout oldLayout, VkImageLayout newLayout) {
+        VkImageMemoryBarrier2 barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+        barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+        barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        barrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
+        barrier.oldLayout = oldLayout;
+        barrier.newLayout = newLayout;
+        barrier.image = image;
+        barrier.subresourceRange =
+            VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+
+        VkDependencyInfo dep{};
+        dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+        dep.imageMemoryBarrierCount = 1;
+        dep.pImageMemoryBarriers = &barrier;
+
+        vkCmdPipelineBarrier2(cmd, &dep);   // a Vulkan 1.3 / synchronization2 call
+    }
 
     Renderer::Renderer(const gpu::Context& ctx, const Swapchain& swapchain) : ctx_(ctx), swapchain_(swapchain) {
         // Command pool — the allocator that command buffers come from. It's tied
@@ -55,7 +78,109 @@ namespace render {
             renderFinished_.size());
     }
 
+    void Renderer::drawFrame() {
+        VkDevice device = ctx_.device();
+
+        // [top of loop] Wait for the previous frame's GPU work to finish, then
+        // un-signal the fence so it can mark THIS frame done. (GPU -> CPU brake.)
+        vkWaitForFences(device, 1, &inFlightFence_, VK_TRUE, UINT64_MAX);
+        vkResetFences(device, 1, &inFlightFence_);
+
+        // [box 1: ACQUIRE] Borrow a free plate. imageAvailable_ is raised when
+        // the image is actually ready; we get back which plate (imageIndex).
+        uint32_t imageIndex = 0;
+        vkAcquireNextImageKHR(device, swapchain_.handle(), UINT64_MAX,
+            imageAvailable_, VK_NULL_HANDLE, &imageIndex);
+
+        // [box 2: RECORD] Write a fresh ticket.
+        vkResetCommandBuffer(commandBuffer_, 0);
+
+        VkCommandBufferBeginInfo begin{};
+        begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(commandBuffer_, &begin);
+
+        VkImage     image = swapchain_.images()[imageIndex];
+        VkImageView view = swapchain_.imageViews()[imageIndex];
+
+        // mode: nothing -> drawable
+        transitionImage(commandBuffer_, image,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+        // dynamic rendering: attach the plate, and CLEAR it to our color.
+        // (Clearing IS our first light — there's nothing else to draw yet.)
+        VkClearValue clear{};
+        clear.color = { { 0.05f, 0.10f, 0.18f, 1.0f } };   // calm dark blue
+
+        VkRenderingAttachmentInfo color{};
+        color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        color.imageView = view;
+        color.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        color.clearValue = clear;
+
+        VkRenderingInfo render{};
+        render.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+        render.renderArea.extent = swapchain_.extent();
+        render.layerCount = 1;
+        render.colorAttachmentCount = 1;
+        render.pColorAttachments = &color;
+
+        vkCmdBeginRendering(commandBuffer_, &render);
+        vkCmdEndRendering(commandBuffer_);
+
+        // mode: drawable -> presentable
+        transitionImage(commandBuffer_, image,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+        vkEndCommandBuffer(commandBuffer_);
+
+        // [box 3: SUBMIT] Clip the ticket to the graphics queue. Wait on
+        // imageAvailable_ before drawing; raise this plate's bell when done;
+        // and signal inFlightFence_ so next frame's wait knows we're finished.
+        VkCommandBufferSubmitInfo cmdInfo{};
+        cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+        cmdInfo.commandBuffer = commandBuffer_;
+
+        VkSemaphoreSubmitInfo wait{};
+        wait.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        wait.semaphore = imageAvailable_;
+        wait.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+        VkSemaphoreSubmitInfo signal{};
+        signal.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+        signal.semaphore = renderFinished_[imageIndex];   // <-- the per-plate bell
+        signal.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
+
+        VkSubmitInfo2 submit{};
+        submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+        submit.waitSemaphoreInfoCount = 1;
+        submit.pWaitSemaphoreInfos = &wait;
+        submit.commandBufferInfoCount = 1;
+        submit.pCommandBufferInfos = &cmdInfo;
+        submit.signalSemaphoreInfoCount = 1;
+        submit.pSignalSemaphoreInfos = &signal;
+
+        vkQueueSubmit2(ctx_.graphicsQueue(), 1, &submit, inFlightFence_);
+
+        // [box 4: PRESENT] Serve the plate. Wait on this plate's bell first.
+        VkSwapchainKHR sc = swapchain_.handle();
+        VkPresentInfoKHR present{};
+        present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present.waitSemaphoreCount = 1;
+        present.pWaitSemaphores = &renderFinished_[imageIndex];
+        present.swapchainCount = 1;
+        present.pSwapchains = &sc;
+        present.pImageIndices = &imageIndex;
+
+        vkQueuePresentKHR(ctx_.presentQueue(), &present);
+    }
+
     Renderer::~Renderer() {
+        vkDeviceWaitIdle(ctx_.device());   // let in-flight work finish first
         for (VkSemaphore sem : renderFinished_)
             vkDestroySemaphore(ctx_.device(), sem, nullptr);
         if (inFlightFence_)  vkDestroyFence(ctx_.device(), inFlightFence_, nullptr);
