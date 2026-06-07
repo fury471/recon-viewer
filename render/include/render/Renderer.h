@@ -28,6 +28,11 @@ namespace render {
         VkSemaphore              imageAvailable_ = VK_NULL_HANDLE;  // per frame
         VkFence                  inFlightFence_ = VK_NULL_HANDLE;   // per frame
         std::vector<VkSemaphore> renderFinished_;                   // one per image
+
+        VkPipelineLayout trianglePipelineLayout_ = VK_NULL_HANDLE;
+        VkPipeline       trianglePipeline_ = VK_NULL_HANDLE;
+
+        void createTrianglePipeline();
     };
 
 }  // namespace render
