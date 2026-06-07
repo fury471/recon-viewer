@@ -16,6 +16,7 @@ namespace render {
 
         Renderer(const Renderer&) = delete;
         Renderer& operator=(const Renderer&) = delete;
+        void drawFrame();
 
     private:
         const gpu::Context& ctx_;
