@@ -107,18 +107,16 @@ namespace render {
     void Renderer::drawFrame() {
         VkDevice device = ctx_.device();
 
-        // [top of loop] Wait for the previous frame's GPU work to finish, then
-        // un-signal the fence so it can mark THIS frame done. (GPU -> CPU brake.)
+        // Wait for the previous frame to finish, then reset the fence.
         vkWaitForFences(device, 1, &inFlightFence_, VK_TRUE, UINT64_MAX);
         vkResetFences(device, 1, &inFlightFence_);
 
-        // [box 1: ACQUIRE] Borrow a free plate. imageAvailable_ is raised when
-        // the image is actually ready; we get back which plate (imageIndex).
+        // Acquire a free swapchain image.
         uint32_t imageIndex = 0;
         vkAcquireNextImageKHR(device, swapchain_.handle(), UINT64_MAX,
             imageAvailable_, VK_NULL_HANDLE, &imageIndex);
 
-        // [box 2: RECORD] Write a fresh ticket.
+        // Begin recording a fresh command buffer.
         vkResetCommandBuffer(commandBuffer_, 0);
 
         VkCommandBufferBeginInfo begin{};
@@ -129,15 +127,14 @@ namespace render {
         VkImage     image = swapchain_.images()[imageIndex];
         VkImageView view = swapchain_.imageViews()[imageIndex];
 
-        // mode: nothing -> drawable
+        // Image mode: nothing -> drawable.
         transitionImage(commandBuffer_, image,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
-        // dynamic rendering: attach the plate, and CLEAR it to our color.
-        // (Clearing IS our first light — there's nothing else to draw yet.)
+        // Attach the image and clear it to dark blue.
         VkClearValue clear{};
-        clear.color = { { 0.05f, 0.10f, 0.18f, 1.0f } };   // calm dark blue
+        clear.color = { { 0.05f, 0.10f, 0.18f, 1.0f } };
 
         VkRenderingAttachmentInfo color{};
         color.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -155,18 +152,36 @@ namespace render {
         render.pColorAttachments = &color;
 
         vkCmdBeginRendering(commandBuffer_, &render);
+
+        // ===== NEW: draw the triangle =====
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(swapchain_.extent().width);
+        viewport.height = static_cast<float>(swapchain_.extent().height);
+        viewport.minDepth = 0.0f;
+        viewport.maxDepth = 1.0f;
+        vkCmdSetViewport(commandBuffer_, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = { 0, 0 };
+        scissor.extent = swapchain_.extent();
+        vkCmdSetScissor(commandBuffer_, 0, 1, &scissor);
+
+        vkCmdBindPipeline(commandBuffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, trianglePipeline_);
+        vkCmdDraw(commandBuffer_, 3, 1, 0, 0);
+        // ===== end new part =====
+
         vkCmdEndRendering(commandBuffer_);
 
-        // mode: drawable -> presentable
+        // Image mode: drawable -> presentable.
         transitionImage(commandBuffer_, image,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
         vkEndCommandBuffer(commandBuffer_);
 
-        // [box 3: SUBMIT] Clip the ticket to the graphics queue. Wait on
-        // imageAvailable_ before drawing; raise this plate's bell when done;
-        // and signal inFlightFence_ so next frame's wait knows we're finished.
+        // Submit the command buffer to the graphics queue.
         VkCommandBufferSubmitInfo cmdInfo{};
         cmdInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
         cmdInfo.commandBuffer = commandBuffer_;
@@ -178,7 +193,7 @@ namespace render {
 
         VkSemaphoreSubmitInfo signal{};
         signal.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-        signal.semaphore = renderFinished_[imageIndex];   // <-- the per-plate bell
+        signal.semaphore = renderFinished_[imageIndex];
         signal.stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT;
 
         VkSubmitInfo2 submit{};
@@ -192,7 +207,7 @@ namespace render {
 
         vkQueueSubmit2(ctx_.graphicsQueue(), 1, &submit, inFlightFence_);
 
-        // [box 4: PRESENT] Serve the plate. Wait on this plate's bell first.
+        // Present the finished image to the window.
         VkSwapchainKHR sc = swapchain_.handle();
         VkPresentInfoKHR present{};
         present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
