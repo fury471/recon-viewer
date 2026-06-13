@@ -59,10 +59,14 @@ namespace gpu {
         features13.dynamicRendering = VK_TRUE;
         features13.synchronization2 = VK_TRUE;
 
+        VkPhysicalDeviceFeatures features10{};
+        features10.largePoints = VK_TRUE;   // allow point sizes larger than 1 pixel
+
         vkb::PhysicalDeviceSelector selector{ impl_->instance };
         auto physRet = selector.set_surface(impl_->surface)
             .set_minimum_version(1, 3)
             .set_required_features_13(features13)
+            .set_required_features(features10)
             .select();
         if (!physRet)
             throw std::runtime_error("gpu: no suitable Vulkan 1.3 GPU: "

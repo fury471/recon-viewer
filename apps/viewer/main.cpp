@@ -46,8 +46,8 @@ int main() {
         spdlog::info("Rendering on: {}", context.deviceName());
 
         render::Swapchain swapchain(context, 1280, 720);
+        render::PointRenderable points(context, swapchain.imageFormat());
         render::Renderer  renderer(context, swapchain);
-        render::PointRenderable points(context);
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
