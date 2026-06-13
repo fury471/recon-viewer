@@ -4,6 +4,7 @@
 #include "gpu/Context.h"
 #include "render/Swapchain.h"
 #include "render/Renderer.h"
+#include "render/PointRenderable.h"
 
 #include <spdlog/spdlog.h>
 
@@ -46,6 +47,7 @@ int main() {
 
         render::Swapchain swapchain(context, 1280, 720);
         render::Renderer  renderer(context, swapchain);
+        render::PointRenderable points(context);
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
