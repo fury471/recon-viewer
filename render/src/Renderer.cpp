@@ -6,33 +6,10 @@
 
 #include <spdlog/spdlog.h>
 #include <stdexcept>
-#include <fstream>
 #include <vector>
 #include <string>
 
 namespace render {
-    static std::vector<char> readFile(const std::string& path) {
-        std::ifstream file(path, std::ios::ate | std::ios::binary);  // open at end
-        if (!file) throw std::runtime_error("render: cannot open shader: " + path);
-        size_t size = static_cast<size_t>(file.tellg());             // position = size
-        std::vector<char> buffer(size);
-        file.seekg(0);
-        file.read(buffer.data(), size);
-        return buffer;
-    }
-
-    static VkShaderModule loadShaderModule(VkDevice device, const std::string& path) {
-        std::vector<char> code = readFile(path);
-        VkShaderModuleCreateInfo info{};
-        info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        info.codeSize = code.size();
-        info.pCode = reinterpret_cast<const uint32_t*>(code.data());
-        VkShaderModule module = VK_NULL_HANDLE;
-        if (vkCreateShaderModule(device, &info, nullptr, &module) != VK_SUCCESS)
-            throw std::runtime_error("render: shader module creation failed: " + path);
-        return module;
-    }
-
     // Changes a swapchain image's "mode". The exact stage/access masks below are
     // the broad, always-correct recipe (we can tighten them for speed later).
     static void transitionImage(VkCommandBuffer cmd, VkImage image,
@@ -101,8 +78,6 @@ namespace render {
 
         spdlog::info("render: sync objects ready ({} render-finished semaphores)",
             renderFinished_.size());
-
-        createTrianglePipeline();
     }
 
     void Renderer::drawFrame(const PointRenderable& points) {
@@ -218,117 +193,8 @@ namespace render {
         vkQueuePresentKHR(ctx_.presentQueue(), &present);
     }
 
-    void Renderer::createTrianglePipeline() {
-        VkDevice device = ctx_.device();
-
-        VkShaderModule vert = loadShaderModule(device, SHADER_OUTPUT_DIR "/triangle.vert.spv");
-        VkShaderModule frag = loadShaderModule(device, SHADER_OUTPUT_DIR "/triangle.frag.spv");
-
-        // [MATTERS] The two programmable stages: our vertex + fragment shaders.
-        VkPipelineShaderStageCreateInfo stages[2]{};
-        stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        stages[0].module = vert;
-        stages[0].pName = "main";                  // the entry-point function name
-        stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        stages[1].module = frag;
-        stages[1].pName = "main";
-
-        // [recipe] No vertex buffers — corners are hardcoded in the shader.
-        VkPipelineVertexInputStateCreateInfo vertexInput{};
-        vertexInput.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-
-        // [MATTERS] We're assembling triangles.
-        VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-        inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
-        // [recipe] Viewport + scissor are set at draw time (dynamic); just say "one each".
-        VkPipelineViewportStateCreateInfo viewport{};
-        viewport.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        viewport.viewportCount = 1;
-        viewport.scissorCount = 1;
-
-        // [recipe] Fill the triangle, no back-face culling.
-        VkPipelineRasterizationStateCreateInfo raster{};
-        raster.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        raster.polygonMode = VK_POLYGON_MODE_FILL;
-        raster.cullMode = VK_CULL_MODE_NONE;
-        raster.frontFace = VK_FRONT_FACE_CLOCKWISE;
-        raster.lineWidth = 1.0f;
-
-        // [recipe] No multisampling.
-        VkPipelineMultisampleStateCreateInfo multisample{};
-        multisample.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-        // [recipe] One color output, no blending (just write the pixel).
-        VkPipelineColorBlendAttachmentState blendAttachment{};
-        blendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
-            | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        blendAttachment.blendEnable = VK_FALSE;
-
-        VkPipelineColorBlendStateCreateInfo colorBlend{};
-        colorBlend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        colorBlend.attachmentCount = 1;
-        colorBlend.pAttachments = &blendAttachment;
-
-        // [recipe] Which bits we'll set per-frame instead of baking in.
-        VkDynamicState dynamics[2] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
-        VkPipelineDynamicStateCreateInfo dynamicState{};
-        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamicState.dynamicStateCount = 2;
-        dynamicState.pDynamicStates = dynamics;
-
-        // [recipe] Empty layout: no descriptor sets or push constants yet.
-        VkPipelineLayoutCreateInfo layoutInfo{};
-        layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &trianglePipelineLayout_)
-            != VK_SUCCESS)
-            throw std::runtime_error("render: pipeline layout creation failed");
-
-        // [MATTERS] Dynamic rendering: instead of a render pass, tell the pipeline
-        // the color format it'll draw into (the swapchain's format).
-        VkFormat colorFormat = swapchain_.imageFormat();
-        VkPipelineRenderingCreateInfo renderingInfo{};
-        renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-        renderingInfo.colorAttachmentCount = 1;
-        renderingInfo.pColorAttachmentFormats = &colorFormat;
-
-        // Assemble the whole form.
-        VkGraphicsPipelineCreateInfo pipelineInfo{};
-        pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.pNext = &renderingInfo;   // <- dynamic rendering
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = stages;
-        pipelineInfo.pVertexInputState = &vertexInput;
-        pipelineInfo.pInputAssemblyState = &inputAssembly;
-        pipelineInfo.pViewportState = &viewport;
-        pipelineInfo.pRasterizationState = &raster;
-        pipelineInfo.pMultisampleState = &multisample;
-        pipelineInfo.pColorBlendState = &colorBlend;
-        pipelineInfo.pDynamicState = &dynamicState;
-        pipelineInfo.layout = trianglePipelineLayout_;
-
-        if (vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo,
-            nullptr, &trianglePipeline_) != VK_SUCCESS)
-            throw std::runtime_error("render: graphics pipeline creation failed");
-
-        // Shader modules are only needed to build the pipeline — free them now.
-        vkDestroyShaderModule(device, frag, nullptr);
-        vkDestroyShaderModule(device, vert, nullptr);
-
-        spdlog::info("render: triangle pipeline ready");
-    }
-
     Renderer::~Renderer() {
         vkDeviceWaitIdle(ctx_.device());   // let ALL in-flight GPU work finish first
-
-        if (trianglePipeline_)
-            vkDestroyPipeline(ctx_.device(), trianglePipeline_, nullptr);
-        if (trianglePipelineLayout_)
-            vkDestroyPipelineLayout(ctx_.device(), trianglePipelineLayout_, nullptr);
         for (VkSemaphore sem : renderFinished_)
             vkDestroySemaphore(ctx_.device(), sem, nullptr);
         if (inFlightFence_)  vkDestroyFence(ctx_.device(), inFlightFence_, nullptr);
