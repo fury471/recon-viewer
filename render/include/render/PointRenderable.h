@@ -18,7 +18,7 @@ namespace render {
     // A cloud of points living in GPU memory, ready to be drawn later.
     class PointRenderable {
     public:
-        explicit PointRenderable(const gpu::Context& ctx);
+        PointRenderable(const gpu::Context& ctx, VkFormat colorFormat);
         ~PointRenderable();
 
         PointRenderable(const PointRenderable&) = delete;
@@ -26,12 +26,19 @@ namespace render {
 
         VkBuffer buffer()      const { return buffer_; }
         uint32_t vertexCount() const { return vertexCount_; }
+        VkPipeline pipeline()    const { return pipeline_; }
 
     private:
+        void createPipeline(VkFormat colorFormat);
+
         const gpu::Context& ctx_;
+
         VkBuffer      buffer_ = VK_NULL_HANDLE;
         VmaAllocation allocation_ = VK_NULL_HANDLE;
         uint32_t      vertexCount_ = 0;
+
+        VkPipelineLayout pipelineLayout_ = VK_NULL_HANDLE;
+        VkPipeline       pipeline_ = VK_NULL_HANDLE;
     };
 
 }  // namespace render
