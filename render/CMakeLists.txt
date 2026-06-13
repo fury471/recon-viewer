@@ -20,7 +20,7 @@ set(SHADER_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 set(SHADER_OUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/shaders)
 file(MAKE_DIRECTORY ${SHADER_OUT_DIR})
 
-set(SHADERS triangle.vert triangle.frag)
+set(SHADERS triangle.vert triangle.frag point.vert point.frag)
 set(SPV_FILES)
 foreach(shader ${SHADERS})
     add_custom_command(
