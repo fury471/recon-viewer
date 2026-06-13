@@ -5,9 +5,11 @@
 #include <vector>
 
 namespace gpu { class Context; }
-namespace render { class Swapchain; }
 
 namespace render {
+
+    class Swapchain;
+    class PointRenderable;
 
     class Renderer {
     public:
@@ -16,7 +18,7 @@ namespace render {
 
         Renderer(const Renderer&) = delete;
         Renderer& operator=(const Renderer&) = delete;
-        void drawFrame();
+        void drawFrame(const PointRenderable& points);
 
     private:
         const gpu::Context& ctx_;
