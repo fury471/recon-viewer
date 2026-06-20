@@ -5,6 +5,7 @@
 #include "render/Swapchain.h"
 #include "render/Renderer.h"
 #include "render/PointRenderable.h"
+#include "render/OrbitCamera.h"
 
 #include <spdlog/spdlog.h>
 
@@ -48,6 +49,10 @@ int main() {
         render::Swapchain swapchain(context, 1280, 720);
         render::PointRenderable points(context, swapchain.imageFormat());
         render::Renderer  renderer(context, swapchain);
+
+        render::OrbitCamera camera;
+        auto e = camera.eye();
+        spdlog::info("camera eye: ({}, {}, {})", e.x(), e.y(), e.z());
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
