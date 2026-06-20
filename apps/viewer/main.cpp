@@ -52,19 +52,38 @@ int main() {
         render::Renderer  renderer(context, swapchain);
 
         render::OrbitCamera camera;
-        auto e = camera.eye();
-        spdlog::info("camera eye: ({}, {}, {})", e.x(), e.y(), e.z());
+
+        // Let the scroll callback reach the camera through the window.
+        glfwSetWindowUserPointer(window, &camera);
+        glfwSetScrollCallback(window, [](GLFWwindow* w, double, double yoff) {
+            auto* cam = static_cast<render::OrbitCamera*>(glfwGetWindowUserPointer(w));
+            cam->zoom(yoff > 0.0 ? 0.9f : 1.1f);   // scroll up = move closer
+            });
+
+        // Remember the cursor position so we can measure drag deltas.
+        double lastX = 0.0, lastY = 0.0;
+        glfwGetCursorPos(window, &lastX, &lastY);
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
 
+            // Left-button drag orbits the camera.
+            double mx, my;
+            glfwGetCursorPos(window, &mx, &my);
+            if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
+                float dx = static_cast<float>(mx - lastX);
+                float dy = static_cast<float>(my - lastY);
+                camera.orbit(-dx * 0.005f, -dy * 0.005f);   // 0.005 = sensitivity
+            }
+            lastX = mx;
+            lastY = my;
+
+            // Build this frame's camera matrices.
             VkExtent2D extent = swapchain.extent();
             float aspect = static_cast<float>(extent.width) /
                 static_cast<float>(extent.height);
-
             Eigen::Matrix4f view = camera.viewMatrix();
-            Eigen::Matrix4f proj = core::perspective(0.785398f /*45 deg*/,
-                aspect, 0.1f, 100.0f);
+            Eigen::Matrix4f proj = core::perspective(0.785398f, aspect, 0.1f, 100.0f);
             Eigen::Matrix4f viewProj = proj * view;
 
             renderer.drawFrame(points, viewProj);
