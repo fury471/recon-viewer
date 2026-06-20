@@ -6,11 +6,11 @@ find_package(spdlog CONFIG REQUIRED)
 add_library(render
     src/Swapchain.cpp
     src/Renderer.cpp
-    src/PointRenderable.cpp)
+    src/PointRenderable.cpp "include/render/OrbitCamera.h")
 
 target_include_directories(render PUBLIC include)
 target_link_libraries(render
-    PUBLIC  Vulkan::Vulkan gpu
+    PUBLIC  Vulkan::Vulkan gpu core
     PRIVATE vk-bootstrap::vk-bootstrap
             GPUOpen::VulkanMemoryAllocator
             spdlog::spdlog)
