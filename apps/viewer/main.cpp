@@ -6,6 +6,7 @@
 #include "render/Renderer.h"
 #include "render/PointRenderable.h"
 #include "render/OrbitCamera.h"
+#include "core/math/Transforms.h"
 
 #include <spdlog/spdlog.h>
 
@@ -56,7 +57,17 @@ int main() {
 
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
-            renderer.drawFrame(points);
+
+            VkExtent2D extent = swapchain.extent();
+            float aspect = static_cast<float>(extent.width) /
+                static_cast<float>(extent.height);
+
+            Eigen::Matrix4f view = camera.viewMatrix();
+            Eigen::Matrix4f proj = core::perspective(0.785398f /*45 deg*/,
+                aspect, 0.1f, 100.0f);
+            Eigen::Matrix4f viewProj = proj * view;
+
+            renderer.drawFrame(points, viewProj);
         }
     }   // gpu::Context destroyed here
 

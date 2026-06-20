@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 
 #include <vector>
+#include <Eigen/Dense>
 
 namespace gpu { class Context; }
 
@@ -18,7 +19,7 @@ namespace render {
 
         Renderer(const Renderer&) = delete;
         Renderer& operator=(const Renderer&) = delete;
-        void drawFrame(const PointRenderable& points);
+        void drawFrame(const PointRenderable& points, const Eigen::Matrix4f& viewProj);
 
     private:
         const gpu::Context& ctx_;

@@ -145,8 +145,15 @@ namespace render {
         dynamicState.dynamicStateCount = 2;
         dynamicState.pDynamicStates = dynamics;
 
+        VkPushConstantRange pushRange{};
+        pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        pushRange.offset = 0;
+        pushRange.size = sizeof(float) * 16;   // one mat4 = 64 bytes
+
         VkPipelineLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layoutInfo.pushConstantRangeCount = 1;
+        layoutInfo.pPushConstantRanges = &pushRange;
         if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipelineLayout_) != VK_SUCCESS)
             throw std::runtime_error("render: point pipeline layout creation failed");
 
