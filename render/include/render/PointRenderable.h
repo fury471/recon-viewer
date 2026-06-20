@@ -27,6 +27,7 @@ namespace render {
         VkBuffer buffer()      const { return buffer_; }
         uint32_t vertexCount() const { return vertexCount_; }
         VkPipeline pipeline()    const { return pipeline_; }
+        VkPipelineLayout pipelineLayout() const { return pipelineLayout_; }
 
     private:
         void createPipeline(VkFormat colorFormat);

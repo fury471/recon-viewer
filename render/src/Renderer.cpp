@@ -80,7 +80,7 @@ namespace render {
             renderFinished_.size());
     }
 
-    void Renderer::drawFrame(const PointRenderable& points) {
+    void Renderer::drawFrame(const PointRenderable& points, const Eigen::Matrix4f& viewProj) {
         VkDevice device = ctx_.device();
 
         vkWaitForFences(device, 1, &inFlightFence_, VK_TRUE, UINT64_MAX);
@@ -140,6 +140,9 @@ namespace render {
 
         // ===== draw the point cloud =====
         vkCmdBindPipeline(commandBuffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, points.pipeline());
+        vkCmdPushConstants(commandBuffer_, points.pipelineLayout(),
+            VK_SHADER_STAGE_VERTEX_BIT, 0,
+            sizeof(float) * 16, viewProj.data());
 
         VkBuffer     vertexBuffers[] = { points.buffer() };
         VkDeviceSize offsets[] = { 0 };
