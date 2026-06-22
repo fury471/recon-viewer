@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <vector>
 #include <string>
+#include <vk_mem_alloc.h>
 
 namespace render {
     // Changes a swapchain image's "mode". The exact stage/access masks below are
@@ -78,6 +79,45 @@ namespace render {
 
         spdlog::info("render: sync objects ready ({} render-finished semaphores)",
             renderFinished_.size());
+
+        createDepthResources();
+    }
+
+    void Renderer::createDepthResources() {
+        VkExtent2D extent = swapchain_.extent();
+
+        // A screen-sized image holding 32-bit float depth, used as a depth attachment.
+        VkImageCreateInfo imageInfo{};
+        imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageInfo.format = VK_FORMAT_D32_SFLOAT;
+        imageInfo.extent = { extent.width, extent.height, 1 };
+        imageInfo.mipLevels = 1;
+        imageInfo.arrayLayers = 1;
+        imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+        imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+        imageInfo.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        VmaAllocationCreateInfo allocInfo{};
+        allocInfo.usage = VMA_MEMORY_USAGE_AUTO;   // GPU-only memory
+
+        if (vmaCreateImage(ctx_.allocator(), &imageInfo, &allocInfo,
+            &depthImage_, &depthAllocation_, nullptr) != VK_SUCCESS)
+            throw std::runtime_error("render: depth image creation failed");
+
+        // A view onto that image, tagged as the DEPTH aspect.
+        VkImageViewCreateInfo viewInfo{};
+        viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        viewInfo.image = depthImage_;
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        viewInfo.format = VK_FORMAT_D32_SFLOAT;
+        viewInfo.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
+        if (vkCreateImageView(ctx_.device(), &viewInfo, nullptr, &depthView_) != VK_SUCCESS)
+            throw std::runtime_error("render: depth image view creation failed");
+
+        spdlog::info("render: depth buffer ready ({}x{}, D32_SFLOAT)",
+            extent.width, extent.height);
     }
 
     void Renderer::drawFrame(const PointRenderable& points, const Eigen::Matrix4f& viewProj) {
@@ -198,6 +238,8 @@ namespace render {
 
     Renderer::~Renderer() {
         vkDeviceWaitIdle(ctx_.device());   // let ALL in-flight GPU work finish first
+        if (depthView_)  vkDestroyImageView(ctx_.device(), depthView_, nullptr);
+        if (depthImage_) vmaDestroyImage(ctx_.allocator(), depthImage_, depthAllocation_);
         for (VkSemaphore sem : renderFinished_)
             vkDestroySemaphore(ctx_.device(), sem, nullptr);
         if (inFlightFence_)  vkDestroyFence(ctx_.device(), inFlightFence_, nullptr);

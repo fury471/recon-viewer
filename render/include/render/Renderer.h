@@ -5,6 +5,8 @@
 #include <vector>
 #include <Eigen/Dense>
 
+VK_DEFINE_HANDLE(VmaAllocation)
+
 namespace gpu { class Context; }
 
 namespace render {
@@ -31,6 +33,12 @@ namespace render {
         VkSemaphore              imageAvailable_ = VK_NULL_HANDLE;  // per frame
         VkFence                  inFlightFence_ = VK_NULL_HANDLE;   // per frame
         std::vector<VkSemaphore> renderFinished_;                   // one per image
+
+        VkImage       depthImage_ = VK_NULL_HANDLE;
+        VmaAllocation depthAllocation_ = VK_NULL_HANDLE;
+        VkImageView   depthView_ = VK_NULL_HANDLE;
+
+        void createDepthResources();
 
     };
 
