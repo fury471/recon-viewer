@@ -145,6 +145,12 @@ namespace render {
         dynamicState.dynamicStateCount = 2;
         dynamicState.pDynamicStates = dynamics;
 
+        VkPipelineDepthStencilStateCreateInfo depthStencil{};
+        depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        depthStencil.depthTestEnable = VK_TRUE;
+        depthStencil.depthWriteEnable = VK_TRUE;
+        depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;   // smaller depth = nearer wins
+
         VkPushConstantRange pushRange{};
         pushRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         pushRange.offset = 0;
@@ -162,6 +168,7 @@ namespace render {
         renderingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
         renderingInfo.colorAttachmentCount = 1;
         renderingInfo.pColorAttachmentFormats = &colorFormat;
+        renderingInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT;
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -174,6 +181,7 @@ namespace render {
         pipelineInfo.pRasterizationState = &raster;
         pipelineInfo.pMultisampleState = &multisample;
         pipelineInfo.pColorBlendState = &colorBlend;
+        pipelineInfo.pDepthStencilState = &depthStencil;
         pipelineInfo.pDynamicState = &dynamicState;
         pipelineInfo.layout = pipelineLayout_;
 

@@ -14,7 +14,8 @@ namespace render {
     // Changes a swapchain image's "mode". The exact stage/access masks below are
     // the broad, always-correct recipe (we can tighten them for speed later).
     static void transitionImage(VkCommandBuffer cmd, VkImage image,
-        VkImageLayout oldLayout, VkImageLayout newLayout) {
+        VkImageLayout oldLayout, VkImageLayout newLayout,
+        VkImageAspectFlags aspect) {
         VkImageMemoryBarrier2 barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
         barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
@@ -25,7 +26,7 @@ namespace render {
         barrier.newLayout = newLayout;
         barrier.image = image;
         barrier.subresourceRange =
-            VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+            VkImageSubresourceRange{ aspect, 0, 1, 0, 1 };
 
         VkDependencyInfo dep{};
         dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
@@ -142,7 +143,14 @@ namespace render {
 
         transitionImage(commandBuffer_, image,
             VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_ASPECT_COLOR_BIT);
+
+        // ===== depth: get the depth image ready to be written =====
+        transitionImage(commandBuffer_, depthImage_,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_ASPECT_DEPTH_BIT);
 
         VkClearValue clear{};
         clear.color = { { 0.05f, 0.10f, 0.18f, 1.0f } };
@@ -155,12 +163,22 @@ namespace render {
         color.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         color.clearValue = clear;
 
+        // ===== depth: attach it and clear to 1.0 (the farthest value) =====
+        VkRenderingAttachmentInfo depth{};
+        depth.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+        depth.imageView = depthView_;
+        depth.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+        depth.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depth.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depth.clearValue.depthStencil = { 1.0f, 0 };
+
         VkRenderingInfo render{};
         render.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
         render.renderArea.extent = swapchain_.extent();
         render.layerCount = 1;
         render.colorAttachmentCount = 1;
         render.pColorAttachments = &color;
+        render.pDepthAttachment = &depth;            // ===== depth =====
 
         vkCmdBeginRendering(commandBuffer_, &render);
 
@@ -178,8 +196,8 @@ namespace render {
         scissor.extent = swapchain_.extent();
         vkCmdSetScissor(commandBuffer_, 0, 1, &scissor);
 
-        // ===== draw the point cloud =====
         vkCmdBindPipeline(commandBuffer_, VK_PIPELINE_BIND_POINT_GRAPHICS, points.pipeline());
+
         vkCmdPushConstants(commandBuffer_, points.pipelineLayout(),
             VK_SHADER_STAGE_VERTEX_BIT, 0,
             sizeof(float) * 16, viewProj.data());
@@ -189,13 +207,13 @@ namespace render {
         vkCmdBindVertexBuffers(commandBuffer_, 0, 1, vertexBuffers, offsets);
 
         vkCmdDraw(commandBuffer_, points.vertexCount(), 1, 0, 0);
-        // ===== end draw =====
 
         vkCmdEndRendering(commandBuffer_);
 
         transitionImage(commandBuffer_, image,
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_IMAGE_ASPECT_COLOR_BIT);
 
         vkEndCommandBuffer(commandBuffer_);
 
